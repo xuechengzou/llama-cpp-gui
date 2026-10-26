@@ -299,6 +299,11 @@ function renderServer(s) {
   } else {
     $("statusClock").textContent = "";
   }
+
+  // 服务停止时，把端口提示恢复为实测状态
+  if (!running && s.status === "idle") {
+    checkPort();
+  }
 }
 
 /* ── 日志 ────────────────────────────────────────────────── */
@@ -452,21 +457,12 @@ function bind() {
   });
 }
 
-/* ── 时钟 ────────────────────────────────────────────────── */
-
-function tickClock() {
-  if (!state.server.running) {
-    const now = new Date();
-    $("statusClock").textContent = "";  // 空闲时不显示时钟
-  }
-}
-
 /* ── 启动 ────────────────────────────────────────────────── */
 
 (function init() {
   $("logBody").innerHTML = '<div class="log-empty">等待启动服务…</div>';
   bind();
   poll();
+  // 统一轮询节奏：800ms 一次，poll 内部有并发保护
   setInterval(poll, 800);
-  setInterval(() => { if (state.server.running) poll(); }, 1000);
 })();
