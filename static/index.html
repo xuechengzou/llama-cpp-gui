@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>llama.cpp 服务管理器</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+
+  <!-- ── 顶栏 ── -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">L</div>
+      <div class="brand-text">
+        <div class="brand-line">
+          <h1>llama.cpp</h1>
+          <span class="brand-sub">服务管理器</span>
+        </div>
+        <div class="brand-meta">MTT S80 · MUSA 4.2.0 · compute 2.1</div>
+      </div>
+    </div>
+
+    <div class="vram-block">
+      <div class="vram-head">
+        <span class="vram-label">显存</span>
+        <span class="vram-value" id="vramValue">-- / -- GB</span>
+      </div>
+      <div class="vram-track"><div class="vram-fill" id="vramFill"></div></div>
+    </div>
+  </header>
+
+  <!-- ── 主体 ── -->
+  <main class="main">
+
+    <!-- 左栏 -->
+    <section class="col-left">
+
+      <div class="card">
+        <div class="card-head"><span>模型</span></div>
+        <div class="card-body">
+          <div class="select-wrap">
+            <select id="modelSelect"></select>
+            <svg class="select-arrow" viewBox="0 0 12 8"><path d="M1 1l5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-ghost" id="btnRefresh">刷新</button>
+            <button class="btn btn-ghost" id="btnBrowse">手动输入</button>
+          </div>
+          <div class="model-meta" id="modelMeta">正在扫描模型…</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><span>预设</span></div>
+        <div class="card-body">
+          <div class="chips" id="presetChips"></div>
+          <div class="preset-desc" id="presetDesc"></div>
+        </div>
+      </div>
+
+      <div class="card card-grow">
+        <div class="card-head"><span>参数</span></div>
+        <div class="card-body">
+          <div class="params">
+
+            <label class="p-row">
+              <span class="p-label">GPU 层数</span>
+              <span class="p-input">
+                <input type="number" id="pNgl" value="99" min="0" max="200">
+                <em>99 = 全部</em>
+              </span>
+            </label>
+
+            <label class="p-row">
+              <span class="p-label">上下文</span>
+              <span class="p-input">
+                <input type="number" id="pCtx" value="16384" min="512" step="1024">
+                <em>tokens</em>
+              </span>
+            </label>
+
+            <label class="p-row">
+              <span class="p-label">并发数</span>
+              <span class="p-input">
+                <input type="number" id="pParallel" value="1" min="1" max="16">
+                <em>通常 1</em>
+              </span>
+            </label>
+
+            <label class="p-row">
+              <span class="p-label">批大小</span>
+              <span class="p-input">
+                <input type="number" id="pUb" value="512" min="32" step="64">
+                <em>S80 用 512</em>
+              </span>
+            </label>
+
+            <div class="p-row">
+              <span class="p-label">FlashAttn</span>
+              <span class="p-input">
+                <span class="mini-select">
+                  <select id="pFa">
+                    <option value="on">on</option>
+                    <option value="auto">auto</option>
+                    <option value="off">off</option>
+                  </select>
+                </span>
+              </span>
+            </div>
+
+            <div class="p-row">
+              <span class="p-label">KV K 类型</span>
+              <span class="p-input">
+                <span class="mini-select">
+                  <select id="pCtk">
+                    <option>q8_0</option><option>f16</option>
+                    <option>q4_0</option><option>bf16</option>
+                  </select>
+                </span>
+              </span>
+            </div>
+
+            <div class="p-row">
+              <span class="p-label">KV V 类型</span>
+              <span class="p-input">
+                <span class="mini-select">
+                  <select id="pCtv">
+                    <option>q8_0</option><option>f16</option>
+                    <option>q4_0</option><option>bf16</option>
+                  </select>
+                </span>
+              </span>
+            </div>
+
+            <label class="p-row">
+              <span class="p-label">端口</span>
+              <span class="p-input">
+                <input type="number" id="pPort" value="8080" min="1024" max="65535">
+                <em id="portHint"></em>
+              </span>
+            </label>
+
+          </div>
+
+          <div class="estimate">
+            <div class="estimate-head">显存预估</div>
+            <div class="estimate-main" id="estMain">--</div>
+            <div class="estimate-detail" id="estDetail"></div>
+            <div class="estimate-warn" id="estWarn"></div>
+          </div>
+
+          <div class="toggles">
+            <label class="tg"><input type="checkbox" id="optBrowser" checked><span>启动后打开浏览器</span></label>
+            <label class="tg"><input type="checkbox" id="optQuiet"><span>精简日志</span></label>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- 右栏 -->
+    <section class="col-right">
+
+      <div class="ctl-bar">
+        <button class="btn btn-primary" id="btnStart">启动服务</button>
+        <button class="btn" id="btnStop" disabled>停止</button>
+        <button class="btn" id="btnRestart" disabled>重启</button>
+        <button class="btn" id="btnOpen" disabled>打开网页</button>
+      </div>
+
+      <div class="status-row">
+        <span class="dot" id="statusDot"></span>
+        <span class="status-text" id="statusText">未启动</span>
+        <span class="status-clock" id="statusClock"></span>
+      </div>
+
+      <div class="cmd-preview">
+        <div class="cmd-label">将执行</div>
+        <div class="cmd-text" id="cmdText"></div>
+      </div>
+
+      <div class="card card-log">
+        <div class="log-head">
+          <span>运行日志</span>
+          <div class="log-tools">
+            <label class="tg tg-sm"><input type="checkbox" id="optAutoScroll" checked><span>自动滚动</span></label>
+            <button class="btn btn-ghost btn-sm" id="btnClearLog">清空</button>
+          </div>
+        </div>
+        <div class="log-body" id="logBody"></div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

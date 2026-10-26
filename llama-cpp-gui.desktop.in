@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=llama.cpp 服务管理器
+Name[en]=llama.cpp Service Manager
+Comment=图形化管理本地 llama-server
+Comment[en]=Manage local llama-server with GUI
+Exec=@GUI_DIR@/启动.sh
+Path=@GUI_DIR@
+Icon=@GUI_DIR@/static/icon.svg
+Terminal=false
+Categories=Development;
+Keywords=llama;llm;ai;gpu;
+StartupNotify=true
