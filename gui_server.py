@@ -240,6 +240,7 @@ class ServerManager:
         self.port = None
         self.status = "idle"                # idle | starting | ready | error
         self.message = ""
+        self.running_cfg = None             # 正在运行的实际配置
         self._reader = None
         self._watcher = None
 
@@ -264,6 +265,7 @@ class ServerManager:
             "port": self.port,
             "uptime": int(time.time() - self.started_at) if self.started_at and running else 0,
             "seq": self.seq,
+            "running_cfg": self.running_cfg if running else None,
         }
 
     # 启动
@@ -330,6 +332,12 @@ class ServerManager:
         self.port = port
         self.status = "starting"
         self.message = "启动中"
+        self.running_cfg = {
+            "model": model, "ngl": ngl, "ctx": ctx,
+            "parallel": parallel, "ub": ub,
+            "fa": fa, "ctk": ctk, "ctv": ctv, "port": port,
+            "argv": args,
+        }
 
         self._reader = threading.Thread(target=self._read, daemon=True)
         self._reader.start()
@@ -355,8 +363,11 @@ class ServerManager:
                 tag = "ok"
             # 全量记录，前端可切换过滤
             self.log(line.rstrip(), tag)
-        # 进程结束
-        code = proc.poll()
+        # 进程结束：等退出码确定
+        try:
+            code = proc.wait(timeout=3)
+        except Exception:
+            code = proc.poll()
         if self.status not in ("idle",):
             if code == 0:
                 self.status = "idle"
@@ -365,9 +376,51 @@ class ServerManager:
                 self.status = "error"
                 self.message = f"异常退出（代码 {code}）"
                 self.log(f"[退出] 进程以代码 {code} 结束", "err")
-                self.log("[提示] 常见原因是显存不足。建议换「省显存」预设，"
-                         "或调小上下文 / 批大小。", "warn")
-                self.log("[注意] 本机单卡同时负责显示，显存耗尽会导致整个桌面崩溃。", "warn")
+                # 按日志内容给出针对性提示，而不是一律归因于显存
+                hints = self._diagnose()
+                for h in hints:
+                    self.log(h, "warn")
+
+    def _diagnose(self):
+        """根据已捕获的日志给出失败原因提示。"""
+        with self.lock:
+            text = "\n".join(t for _, t, _ in self.lines).lower()
+
+        if "unknown pre-tokenizer type" in text or "unknown model architecture" in text:
+            import re as _re
+            kind = "分词器" if "pre-tokenizer" in text else "模型架构"
+            m = _re.search(r"unknown (?:pre-tokenizer type|model architecture): '([^']+)'", text)
+            name = m.group(1) if m else "未知"
+            return [
+                f"[诊断] 当前 llama.cpp 版本不支持这个模型的{kind}：{name}",
+                "[建议] 这不是显存问题。需要满足以下之一：",
+                "  · 换一个架构受支持的模型（如 Qwen3 系列的 qwen3）",
+                "  · 或重新编译更新版本的 llama.cpp 以支持该架构",
+                "[参考] 在 GUI 里点模型的下拉框换其他模型即可。",
+            ]
+
+        if "quantized v cache was requested" in text:
+            return [
+                "[诊断] KV 量化需要 Flash Attention，但 FA 未启用。",
+                "[建议] 把 FlashAttn 设为 on（GUI 通常会自动纠正，"
+                "若手动改过后请复位）。",
+            ]
+
+        if "out of memory" in text or "invalid argument" in text \
+                or "musafuncsetattribute" in text or "failed to allocate" in text:
+            return [
+                "[诊断] 显存不足或共享内存超限。",
+                "[建议] 换「省显存」预设，或调小上下文 / 批大小。",
+                "[注意] 本机单卡同时负责显示，显存耗尽会导致整个桌面崩溃。",
+            ]
+
+        if "port" in text and ("address already in use" in text or "bind" in text):
+            return ["[诊断] 端口被占用，请换一个端口。"]
+
+        return [
+            "[诊断] 模型加载失败，请查看上方日志中的 error 行。",
+            "[建议] 常见原因：模型架构不受支持、文件损坏、参数不兼容。",
+        ]
 
     def _wait_ready(self, port):
         import urllib.request
@@ -412,6 +465,7 @@ class ServerManager:
         self.status = "idle"
         self.message = "已停止"
         self.started_at = None
+        self.running_cfg = None
         self.log("[停止] 服务已关闭", "dim")
         return {"ok": True}
 

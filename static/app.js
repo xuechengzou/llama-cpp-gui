@@ -303,7 +303,54 @@ function renderServer(s) {
   // 服务停止时，把端口提示恢复为实测状态
   if (!running && s.status === "idle") {
     checkPort();
+    state.runningModel = null;
   }
+
+  // 运行中：让界面显示真正在跑的那个模型和参数
+  const cfg = s.running_cfg;
+  if (running && cfg) {
+    if (state.runningModel !== cfg.model) {
+      state.runningModel = cfg.model;
+      syncUiToRunning(cfg);
+    }
+  }
+}
+
+/* ── 运行态同步 ──────────────────────────────────────────── */
+
+function syncUiToRunning(cfg) {
+  // 模型下拉框切到实际运行的那个
+  const sel = $("modelSelect");
+  const has = Array.from(sel.options).some((o) => o.value === cfg.model);
+  if (has) {
+    sel.value = cfg.model;
+    state.manualModel = null;
+  } else {
+    state.manualModel = cfg.model;
+    const opt = document.createElement("option");
+    opt.value = cfg.model;
+    opt.textContent = cfg.model.substring(cfg.model.lastIndexOf("/") + 1) +
+                      "   ·   运行中";
+    sel.appendChild(opt);
+    sel.value = cfg.model;
+  }
+
+  // 参数框同步
+  $("pNgl").value = cfg.ngl;
+  $("pCtx").value = cfg.ctx;
+  $("pParallel").value = cfg.parallel;
+  $("pUb").value = cfg.ub;
+  $("pFa").value = cfg.fa;
+  $("pCtk").value = cfg.ctk;
+  $("pCtv").value = cfg.ctv;
+  $("pPort").value = cfg.port;
+
+  // 取消预设高亮（因为参数已是运行态，可能不对应任何预设）
+  document.querySelectorAll(".chip").forEach((c) => c.classList.remove("active"));
+  $("presetDesc").textContent = "参数已同步为当前运行中的配置";
+
+  updateModelMeta();
+  updateCmdPreview();
 }
 
 /* ── 日志 ────────────────────────────────────────────────── */
