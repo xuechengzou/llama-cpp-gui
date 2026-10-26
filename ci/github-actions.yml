@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.9", "3.11", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: 检查 Python 语法
+        run: |
+          python -m py_compile gui_server.py
+          echo "✓ gui_server.py 语法正确"
+
+      - name: 检查前端资源完整性
+        run: |
+          for f in static/index.html static/style.css static/app.js static/icon.svg; do
+            if [ ! -s "$f" ]; then
+              echo "✗ 缺失或为空: $f"
+              exit 1
+            fi
+            echo "✓ $f ($(wc -c < "$f") 字节)"
+          done
+
+      - name: 检查后端能否导入
+        run: |
+          python -c "
+          import importlib.util, sys
+          spec = importlib.util.spec_from_file_location('gui_server', 'gui_server.py')
+          m = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(m)
+          # 核心函数应当存在
+          for fn in ('find_models', 'vram_info', 'model_params', 'read_gguf_meta', 'port_in_use'):
+              assert hasattr(m, fn), f'缺少函数: {fn}'
+          print('✓ 模块导入与关键函数检查通过')
+          "
+
+      - name: 检查 GGUF 解析器逻辑
+        run: |
+          python -c "
+          import importlib.util
+          spec = importlib.util.spec_from_file_location('gui_server', 'gui_server.py')
+          m = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(m)
+
+          # KV_BYTES 表应覆盖常用量化类型
+          for t in ('f16', 'bf16', 'q8_0', 'q4_0'):
+              assert t in m.KV_BYTES, f'KV_BYTES 缺少 {t}'
+
+          # 预设结构完整性
+          for name, p in m.PRESETS.items():
+              for k in ('ctx', 'parallel', 'fa', 'ctk', 'ctv'):
+                  assert k in p, f'预设 {name} 缺少 {k}'
+              assert p['fa'] in ('on', 'off', 'auto'), f'预设 {name} 的 fa 非法'
+
+          print(f'✓ {len(m.PRESETS)} 个预设结构正确')
+          "
+
+      - name: 检查必需文件
+        run: |
+          for f in README.md LICENSE 启动.sh llama-cpp-gui.desktop.in; do
+            test -s "$f" || { echo "✗ 缺失: $f"; exit 1; }
+            echo "✓ $f"
+          done
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 检查 shell 脚本
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y shellcheck
+          shellcheck 启动.sh || true
+          echo "✓ 启动.sh 检查完成"

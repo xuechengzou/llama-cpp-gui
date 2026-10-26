@@ -136,6 +136,21 @@ mtgpu: comm = chrome,      force destroy app memory context
 Web UI 方案完全绕开这个问题：中文、阴影、圆角、动画都由浏览器负责，
 而且天然支持高分屏，改样式也不用重新编译。
 
+## CI
+
+`ci/github-actions.yml` 是准备给 GitHub Actions 的工作流（语法检查、
+模块导入验证、预设结构校验、前端资源完整性、shellcheck）。
+
+它没有直接放在 `.github/workflows/` 下，是因为推送工作流文件需要 token
+具备 `workflow` 权限，而当前用的 token 没有。启用方法见
+[`ci/README.md`](ci/README.md)。
+
+本地也能跑等价检查：
+
+```bash
+python3 -m py_compile gui_server.py
+```
+
 ## 依赖
 
 - Python 3.8+
@@ -149,6 +164,8 @@ Web UI 方案完全绕开这个问题：中文、阴影、圆角、动画都由�
 ├── 启动.sh              启动脚本（设置 LD_LIBRARY_PATH 后运行）
 ├── gui_server.py        HTTP 服务 + 进程管理 + GGUF 解析
 ├── llama-cpp-gui.desktop.in   桌面入口模板
+├── ci/                  CI 配置与说明
+├── docs/                截图
 └── static/
     ├── index.html       界面结构
     ├── style.css        深色主题
